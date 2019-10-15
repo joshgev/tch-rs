@@ -14,6 +14,7 @@ pub use wrappers::jit::{CModule, IValue};
 pub use wrappers::kind::Kind;
 pub use wrappers::manual_seed;
 pub use wrappers::scalar::Scalar;
+pub use wrappers::AsView;
 
 mod tensor;
 pub use tensor::{

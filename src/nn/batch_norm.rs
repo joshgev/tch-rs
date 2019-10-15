@@ -1,5 +1,5 @@
 //! A batch-normalization layer.
-use crate::{Device, Tensor, ToDevice};
+use crate::{AsView, Device, Tensor, ToDevice};
 use std::borrow::Borrow;
 
 /// Batch-normalization config.
@@ -126,6 +126,19 @@ impl ToDevice for BatchNorm {
             running_var: self.running_var.to_device(device),
             ws: self.ws.to_device(device),
             bs: self.bs.to_device(device),
+            nd: self.nd,
+        }
+    }
+}
+
+impl AsView for BatchNorm {
+    fn as_view(&self) -> Self {
+        Self {
+            config: self.config,
+            running_mean: self.running_mean.as_view(),
+            running_var: self.running_var.as_view(),
+            ws: self.ws.as_view(),
+            bs: self.bs.as_view(),
             nd: self.nd,
         }
     }

@@ -1,5 +1,5 @@
 //! Recurrent Neural Networks
-use crate::{Device, Kind, Tensor, ToDevice};
+use crate::{AsView, Device, Kind, Tensor, ToDevice};
 
 /// Trait for Recurrent Neural Networks.
 pub trait RNN {
@@ -160,6 +160,21 @@ impl ToDevice for LSTM {
     }
 }
 
+impl AsView for LSTM {
+    fn as_view(&self) -> Self {
+        Self {
+            flat_weights: self
+                .flat_weights
+                .iter()
+                .map(|x| x.as_view())
+                .collect::<Vec<_>>(),
+            hidden_dim: self.hidden_dim,
+            config: self.config,
+            device: self.device,
+        }
+    }
+}
+
 /// A GRU state, this contains a single tensor.
 #[derive(Debug)]
 pub struct GRUState(pub Tensor);
@@ -254,6 +269,21 @@ impl ToDevice for GRU {
             hidden_dim: self.hidden_dim,
             config: self.config,
             device,
+        }
+    }
+}
+
+impl AsView for GRU {
+    fn as_view(&self) -> Self {
+        Self {
+            flat_weights: self
+                .flat_weights
+                .iter()
+                .map(|x| x.as_view())
+                .collect::<Vec<_>>(),
+            hidden_dim: self.hidden_dim,
+            config: self.config,
+            device: self.device,
         }
     }
 }

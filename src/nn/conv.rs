@@ -1,6 +1,6 @@
 //! N-dimensional convolution layers.
 use super::Path;
-use crate::{Device, Tensor, ToDevice};
+use crate::{AsView, Device, Tensor, ToDevice};
 use std::borrow::Borrow;
 
 /// Generic convolution config.
@@ -198,6 +198,19 @@ where
         Self {
             ws: self.ws.to_device(device),
             bs: self.bs.as_ref().map(|x| x.to_device(device)),
+            config: self.config.clone(),
+        }
+    }
+}
+
+impl<ND> AsView for Conv<ND>
+where
+    ConvConfigND<ND>: Clone,
+{
+    fn as_view(&self) -> Self {
+        Self {
+            ws: self.ws.as_view(),
+            bs: self.bs.as_ref().map(|x| x.as_view()),
             config: self.config.clone(),
         }
     }

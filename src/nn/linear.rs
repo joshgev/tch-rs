@@ -1,5 +1,5 @@
 //! A linear fully-connected layer.
-use crate::{Device, Tensor, ToDevice};
+use crate::{AsView, Device, Tensor, ToDevice};
 use std::borrow::Borrow;
 
 /// Configuration for a linear layer.
@@ -57,6 +57,15 @@ impl ToDevice for Linear {
         Self {
             ws: self.ws.to_device(device),
             bs: self.bs.to_device(device),
+        }
+    }
+}
+
+impl AsView for Linear {
+    fn as_view(&self) -> Self {
+        Self {
+            ws: self.ws.as_view(),
+            bs: self.bs.as_view(),
         }
     }
 }

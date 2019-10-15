@@ -1,6 +1,7 @@
 #[macro_use]
 mod utils;
 pub use utils::manual_seed;
+pub use utils::AsView;
 
 pub(crate) mod device;
 pub(crate) mod image;

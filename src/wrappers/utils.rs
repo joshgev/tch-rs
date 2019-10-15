@@ -69,3 +69,8 @@ pub(super) fn path_to_cstring<T: AsRef<std::path::Path>>(path: T) -> Fallible<st
 pub fn manual_seed(seed: i64) {
     unsafe_torch!({ torch_sys::at_manual_seed(seed) })
 }
+
+/// A trait for objects that can have shallow copies made.
+pub trait AsView {
+    fn as_view(&self) -> Self;
+}

@@ -4,6 +4,7 @@ use super::{
     kind,
     kind::Kind,
 };
+use crate::AsView;
 use failure::Fallible;
 use libc::{c_char, c_int, c_void};
 use std::borrow::Borrow;
@@ -457,5 +458,11 @@ impl Reduction {
 impl ToDevice for Tensor {
     fn to_device(&self, device: Device) -> Self {
         Tensor::to_device(self, device)
+    }
+}
+
+impl AsView for Tensor {
+    fn as_view(&self) -> Self {
+        self.shallow_clone()
     }
 }
