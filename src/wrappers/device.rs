@@ -64,3 +64,11 @@ impl Device {
         }
     }
 }
+
+/// A trait describing objects that can be cloned onto different devices.
+///
+/// If the object is already on the given device, then it is sufficient to
+/// return a shallow copy.
+pub trait ToDevice {
+    fn to_device(&self, device: Device) -> Self;
+}

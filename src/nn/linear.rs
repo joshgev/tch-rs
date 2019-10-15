@@ -1,5 +1,5 @@
 //! A linear fully-connected layer.
-use crate::Tensor;
+use crate::{Device, Tensor, ToDevice};
 use std::borrow::Borrow;
 
 /// Configuration for a linear layer.
@@ -49,5 +49,14 @@ pub fn linear<'a, T: Borrow<super::Path<'a>>>(
 impl super::module::Module for Linear {
     fn forward(&self, xs: &Tensor) -> Tensor {
         xs.matmul(&self.ws.tr()) + &self.bs
+    }
+}
+
+impl ToDevice for Linear {
+    fn to_device(&self, device: Device) -> Self {
+        Self {
+            ws: self.ws.to_device(device),
+            bs: self.bs.to_device(device),
+        }
     }
 }

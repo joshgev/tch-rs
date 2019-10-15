@@ -1,6 +1,6 @@
 //! N-dimensional convolution layers.
 use super::Path;
-use crate::Tensor;
+use crate::{Device, Tensor, ToDevice};
 use std::borrow::Borrow;
 
 /// Generic convolution config.
@@ -187,5 +187,18 @@ impl super::module::Module for Conv3D {
             &self.config.dilation,
             self.config.groups,
         )
+    }
+}
+
+impl<ND> ToDevice for Conv<ND>
+where
+    ConvConfigND<ND>: Clone,
+{
+    fn to_device(&self, device: Device) -> Self {
+        Self {
+            ws: self.ws.to_device(device),
+            bs: self.bs.as_ref().map(|x| x.to_device(device)),
+            config: self.config.clone(),
+        }
     }
 }

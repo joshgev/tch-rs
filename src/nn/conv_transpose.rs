@@ -1,6 +1,6 @@
 //! A two dimension transposed convolution layer.
 use super::Path;
-use crate::Tensor;
+use crate::{Device, Tensor, ToDevice};
 use std::borrow::Borrow;
 
 /// A generic transposed convolution configuration.
@@ -187,5 +187,18 @@ impl super::module::Module for ConvTranspose3D {
             self.config.groups,
             &self.config.dilation,
         )
+    }
+}
+
+impl<ND> ToDevice for ConvTransposeND<ND>
+where
+    ConvTransposeConfigND<ND>: Clone,
+{
+    fn to_device(&self, device: Device) -> Self {
+        Self {
+            ws: self.ws.to_device(device),
+            bs: self.bs.as_ref().map(|x| x.to_device(device)),
+            config: self.config.clone(),
+        }
     }
 }

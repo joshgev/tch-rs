@@ -1,5 +1,5 @@
 //! Sparse Layers
-use crate::Tensor;
+use crate::{Device, Tensor, ToDevice};
 use std::borrow::Borrow;
 
 /// Configuration option for an embedding layer.
@@ -59,5 +59,14 @@ impl super::module::Module for Embedding {
             self.config.scale_grad_by_freq,
             self.config.sparse,
         )
+    }
+}
+
+impl ToDevice for Embedding {
+    fn to_device(&self, device: Device) -> Self {
+        Self {
+            ws: self.ws.to_device(device),
+            config: self.config,
+        }
     }
 }

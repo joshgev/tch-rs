@@ -1,5 +1,9 @@
 use super::utils::{path_to_cstring, ptr_to_string};
-use super::{device::Device, kind, kind::Kind};
+use super::{
+    device::{Device, ToDevice},
+    kind,
+    kind::Kind,
+};
 use failure::Fallible;
 use libc::{c_char, c_int, c_void};
 use std::borrow::Borrow;
@@ -447,5 +451,11 @@ impl Reduction {
             Reduction::Sum => 2,
             Reduction::Other(i) => i,
         }
+    }
+}
+
+impl ToDevice for Tensor {
+    fn to_device(&self, device: Device) -> Self {
+        Tensor::to_device(self, device)
     }
 }

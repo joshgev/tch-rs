@@ -1,5 +1,5 @@
 //! A batch-normalization layer.
-use crate::Tensor;
+use crate::{Device, Tensor, ToDevice};
 use std::borrow::Borrow;
 
 /// Batch-normalization config.
@@ -115,5 +115,18 @@ impl super::module::ModuleT for BatchNorm {
             self.config.eps,
             self.config.cudnn_enabled,
         )
+    }
+}
+
+impl ToDevice for BatchNorm {
+    fn to_device(&self, device: Device) -> Self {
+        Self {
+            config: self.config,
+            running_mean: self.running_mean.to_device(device),
+            running_var: self.running_var.to_device(device),
+            ws: self.ws.to_device(device),
+            bs: self.bs.to_device(device),
+            nd: self.nd,
+        }
     }
 }
