@@ -1,5 +1,6 @@
 //! Recurrent Neural Networks
 use crate::{AsView, Device, Kind, Tensor, ToDevice};
+use failure::{bail, ensure, Error};
 
 /// Trait for Recurrent Neural Networks.
 pub trait RNN {
@@ -285,5 +286,375 @@ impl AsView for GRU {
             config: self.config,
             device: self.device,
         }
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum RnnType {
+    Lstm,
+    Gru,
+}
+
+impl RnnType {
+    pub fn num_gates(self) -> i64 {
+        match self {
+            RnnType::Lstm => 4,
+            RnnType::Gru => 3,
+        }
+    }
+
+    fn from_num_gates(num_gates: i64) -> Result<Self, Error> {
+        match num_gates {
+            3 => Ok(RnnType::Gru),
+            4 => Ok(RnnType::Lstm),
+            _ => bail!("Unknown RNN type from number of gates: {}", num_gates),
+        }
+    }
+}
+
+pub struct RnnWeights {
+    w_ih: Tensor,
+    w_hh: Tensor,
+    b_ih: Option<Tensor>,
+    b_hh: Option<Tensor>,
+    rnn_type: RnnType,
+}
+
+impl RnnWeights {
+    pub fn new(
+        w_ih: Tensor,
+        w_hh: Tensor,
+        b_ih: Option<Tensor>,
+        b_hh: Option<Tensor>,
+    ) -> Result<Self, Error> {
+        ensure!(w_ih.dim() == 2, "w_ih should be 2D.");
+        ensure!(w_hh.dim() == 2, "w_hh should be 2D.");
+
+        ensure!(w_ih.device() == w_hh.device(), "Device mis-match.");
+
+        let w_ih_size = w_ih.size2().unwrap();
+        let w_hh_size = w_ih.size2().unwrap();
+
+        ensure!(
+            w_ih_size.0 == w_hh_size.0,
+            "w_ih and w_hh are incompatible."
+        );
+
+        if let Some(ref b_ih) = b_ih {
+            ensure!(b_ih.dim() == 1, "b_ih should be 1D.");
+            let b_ih_size = b_ih.size1().unwrap();
+            ensure!(w_ih_size.0 == b_ih_size, "w_ih and b_ih are incompatible.");
+            ensure!(w_ih.device() == b_ih.device(), "Device mis-match.");
+        }
+
+        if let Some(ref b_hh) = b_hh {
+            ensure!(b_hh.dim() == 1, "b_hh should be 1D.");
+            let b_hh_size = b_hh.size1().unwrap();
+            ensure!(w_hh_size.0 == b_hh_size, "w_hh and b_hh are incompatible.");
+            ensure!(w_hh.device() == b_hh.device(), "Device mis-match.");
+        }
+
+        ensure!(
+            b_ih.is_some() == b_hh.is_some(),
+            "Either both b_ih, b_hh must be specified, or neither."
+        );
+
+        let rnn_type = RnnType::from_num_gates({
+            let size = w_hh.size2().unwrap();
+            size.0 / size.1
+        })?;
+
+        Ok(Self {
+            w_ih,
+            w_hh,
+            b_ih,
+            b_hh,
+            rnn_type,
+        })
+    }
+
+    pub fn rnn_type(&self) -> RnnType {
+        self.rnn_type
+    }
+
+    pub fn has_biases(&self) -> bool {
+        self.b_ih.is_some()
+    }
+
+    pub fn input_features(&self) -> i64 {
+        self.w_ih.size2().unwrap().1
+    }
+
+    pub fn hidden_dim(&self) -> i64 {
+        self.w_ih.size2().unwrap().0 / self.rnn_type().num_gates()
+    }
+
+    pub fn device(&self) -> Device {
+        self.w_ih.device()
+    }
+
+    fn push_into(self, dst: &mut Vec<Tensor>) {
+        dst.push(self.w_ih);
+        dst.push(self.w_hh);
+        if let Some(b_ih) = self.b_ih {
+            dst.push(b_ih);
+            dst.push(self.b_hh.expect("Inconsistent bias. This is a bug."));
+        }
+    }
+
+    #[must_use]
+    pub fn set_requires_grad(&self, requires_grad: bool) -> Self {
+        Self {
+            w_ih: self.w_ih.set_requires_grad(requires_grad),
+            w_hh: self.w_hh.set_requires_grad(requires_grad),
+            b_ih: self
+                .b_ih
+                .as_ref()
+                .map(|x| x.set_requires_grad(requires_grad)),
+            b_hh: self
+                .b_hh
+                .as_ref()
+                .map(|x| x.set_requires_grad(requires_grad)),
+            rnn_type: self.rnn_type,
+        }
+    }
+}
+
+pub struct RnnLayer {
+    forward: RnnWeights,
+    reverse: Option<RnnWeights>,
+}
+
+impl RnnLayer {
+    pub fn new(forward: RnnWeights, reverse: Option<RnnWeights>) -> Result<Self, Error> {
+        if let Some(ref reverse) = reverse {
+            ensure!(
+                forward.has_biases() == reverse.has_biases(),
+                "Forward and reverse layers have different bias settings."
+            );
+            ensure!(
+                forward.input_features() == reverse.input_features(),
+                "Forward and reverse layers have different numbers of input feautres."
+            );
+            ensure!(
+                forward.hidden_dim() == reverse.hidden_dim(),
+                "Forward and reverse layers have different hidden dimensionality."
+            );
+            ensure!(forward.device() == reverse.device(), "Device mis-match.");
+            ensure!(
+                forward.rnn_type() == reverse.rnn_type(),
+                "RNN type mis-match."
+            );
+        }
+
+        Ok(Self { forward, reverse })
+    }
+
+    pub fn has_biases(&self) -> bool {
+        self.forward.has_biases()
+    }
+
+    pub fn input_features(&self) -> i64 {
+        self.forward.input_features()
+    }
+
+    pub fn bidirectional(&self) -> bool {
+        self.reverse.is_some()
+    }
+
+    pub fn hidden_dim(&self) -> i64 {
+        self.forward.hidden_dim()
+    }
+
+    pub fn output_features(&self) -> i64 {
+        self.forward.hidden_dim() * if self.bidirectional() { 2 } else { 1 }
+    }
+
+    pub fn rnn_type(&self) -> RnnType {
+        self.forward.rnn_type()
+    }
+
+    pub fn device(&self) -> Device {
+        self.forward.device()
+    }
+
+    fn push_into(self, dst: &mut Vec<Tensor>) {
+        self.forward.push_into(dst);
+        if let Some(reverse) = self.reverse {
+            reverse.push_into(dst);
+        }
+    }
+
+    #[must_use]
+    pub fn set_requires_grad(&self, requires_grad: bool) -> Self {
+        Self {
+            forward: self.forward.set_requires_grad(requires_grad),
+            reverse: self
+                .reverse
+                .as_ref()
+                .map(|x| x.set_requires_grad(requires_grad)),
+        }
+    }
+}
+
+pub struct RnnBuilder {
+    layers: Vec<RnnLayer>,
+    config: RnnBuilderConfig,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct RnnBuilderConfig {
+    pub dropout: f64,
+    pub train: bool,
+    pub batch_first: bool,
+}
+
+impl Default for RnnBuilderConfig {
+    fn default() -> Self {
+        let x = RNNConfig::default();
+        Self {
+            dropout: x.dropout,
+            train: x.train,
+            batch_first: x.batch_first,
+        }
+    }
+}
+
+impl RnnBuilder {
+    pub fn new(config: RnnBuilderConfig) -> Self {
+        Self {
+            layers: Default::default(),
+            config,
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.layers.is_empty()
+    }
+
+    pub fn input_features(&self) -> Option<i64> {
+        self.layers.first().map(|layer| layer.input_features())
+    }
+
+    pub fn hidden_dim(&self) -> Option<i64> {
+        self.layers.last().map(|layer| layer.hidden_dim())
+    }
+
+    pub fn output_features(&self) -> Option<i64> {
+        self.layers.last().map(|layer| layer.output_features())
+    }
+
+    pub fn bidirectional(&self) -> Option<bool> {
+        self.layers.first().map(|layer| layer.bidirectional())
+    }
+
+    pub fn has_biases(&self) -> Option<bool> {
+        self.layers.first().map(|layer| layer.has_biases())
+    }
+
+    pub fn num_layers(&self) -> usize {
+        self.layers.len() as usize
+    }
+
+    pub fn len(&self) -> usize {
+        self.num_layers()
+    }
+
+    pub fn rnn_type(&self) -> Option<RnnType> {
+        self.layers.first().map(|layer| layer.rnn_type())
+    }
+
+    pub fn device(&self) -> Option<Device> {
+        self.layers.first().map(|layer| layer.device())
+    }
+
+    pub fn rnn_config(&self) -> Option<RNNConfig> {
+        if self.layers.is_empty() {
+            None
+        } else {
+            Some(RNNConfig {
+                has_biases: self.has_biases().unwrap(),
+                num_layers: self.num_layers() as i64,
+                dropout: self.config.dropout,
+                train: self.config.train,
+                bidirectional: self.bidirectional().unwrap(),
+                batch_first: self.config.batch_first,
+            })
+        }
+    }
+
+    pub fn push(&mut self, layer: RnnLayer) -> Result<&mut Self, Error> {
+        if let Some(last) = self.layers.last() {
+            ensure!(
+                last.output_features() == layer.input_features(),
+                "Input/output feature dimensionality mismatch."
+            );
+            ensure!(
+                last.output_features() == layer.output_features(),
+                "Inconsistent hidden state size."
+            );
+            ensure!(last.has_biases() == layer.has_biases(), "Change in biases.");
+            ensure!(
+                last.bidirectional() == layer.bidirectional(),
+                "Change in bidirectionality."
+            );
+            ensure!(last.rnn_type() == layer.rnn_type(), "Change in RNN type.");
+            ensure!(last.device() == layer.device(), "Device mis-match.");
+        }
+
+        self.layers.push(layer);
+
+        Ok(self)
+    }
+
+    fn gather_weights(self) -> Vec<Tensor> {
+        let mut weights = Vec::with_capacity(
+            self.num_layers()
+                * if self.bidirectional().unwrap() { 2 } else { 1 }
+                * if self.has_biases().unwrap() { 2 } else { 1 },
+        );
+
+        for layer in self.layers {
+            layer.push_into(&mut weights);
+        }
+
+        weights
+    }
+
+    pub fn lstm(self) -> Result<LSTM, Error> {
+        ensure!(!self.layers.is_empty(), "No layers defined.");
+        ensure!(
+            self.rnn_type().unwrap() == RnnType::Lstm,
+            "Underlying RNN is not an LSTM."
+        );
+
+        Ok(LSTM {
+            hidden_dim: self.hidden_dim().unwrap(),
+            config: self.rnn_config().unwrap(),
+            device: self.device().unwrap(),
+            flat_weights: self.gather_weights(),
+        })
+    }
+
+    pub fn set_requires_grad(&mut self, requires_grad: bool) -> &mut Self {
+        for layer in &mut self.layers {
+            *layer = layer.set_requires_grad(requires_grad);
+        }
+        self
+    }
+
+    pub fn gru(self) -> Result<GRU, Error> {
+        ensure!(!self.layers.is_empty(), "No layers defined.");
+        ensure!(
+            self.rnn_type().unwrap() == RnnType::Gru,
+            "Underlying RNN is not a GRU."
+        );
+
+        Ok(GRU {
+            hidden_dim: self.hidden_dim().unwrap(),
+            config: self.rnn_config().unwrap(),
+            device: self.device().unwrap(),
+            flat_weights: self.gather_weights(),
+        })
     }
 }

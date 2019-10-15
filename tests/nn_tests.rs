@@ -157,3 +157,197 @@ fn lstm() {
         ..Default::default()
     });
 }
+
+fn make_weights(
+    ty: nn::RnnType,
+    input_size: i64,
+    hidden_size: i64,
+    with_bias: bool,
+) -> nn::RnnWeights {
+    let gate_size = hidden_size * ty.num_gates();
+    nn::RnnWeights::new(
+        Tensor::randn(&[gate_size, input_size], (Kind::Float, Device::Cpu)),
+        Tensor::randn(&[gate_size, hidden_size], (Kind::Float, Device::Cpu)),
+        if with_bias {
+            Some(Tensor::randn(&[gate_size], (Kind::Float, Device::Cpu)))
+        } else {
+            None
+        },
+        if with_bias {
+            Some(Tensor::randn(&[gate_size], (Kind::Float, Device::Cpu)))
+        } else {
+            None
+        },
+    )
+    .unwrap()
+}
+
+fn make_layer(
+    ty: nn::RnnType,
+    input_size: i64,
+    hidden_size: i64,
+    with_bias: bool,
+    bidirectional: bool,
+) -> nn::RnnLayer {
+    nn::RnnLayer::new(
+        make_weights(ty, input_size, hidden_size, with_bias),
+        if bidirectional {
+            Some(make_weights(ty, input_size, hidden_size, with_bias))
+        } else {
+            None
+        },
+    )
+    .unwrap()
+}
+
+#[test]
+fn builder_weights() {
+    // An RNN will have weights of size:
+    //   w_ih: (num_gates * hidden_size, input_size)
+    //   w_hh: (num_gates * hidden_size, hidden_size)
+    //   b_ih: (num_gates * hidden_size)
+    //   b_hh: (num_gates * hidden_size)
+    // where `input_size` is the previous layer's output size for the first
+    // RNN layer, and `hidden_size * num_directions` for subsequent layers.
+
+    const INPUT_SIZE: i64 = 3;
+    const HIDDEN_SIZE: i64 = 7;
+
+    for &rnn_type in &[nn::RnnType::Lstm, nn::RnnType::Gru] {
+        for &is_first in &[false, true] {
+            for &with_bias in &[false, true] {
+                for &num_directions in &[1, 2] {
+                    let input_size = if is_first {
+                        INPUT_SIZE
+                    } else {
+                        HIDDEN_SIZE * num_directions
+                    };
+
+                    let x = make_weights(rnn_type, input_size, HIDDEN_SIZE, with_bias);
+
+                    assert_eq!(x.rnn_type(), rnn_type);
+                    assert_eq!(x.has_biases(), with_bias);
+                    assert_eq!(x.input_features(), input_size);
+                    assert_eq!(x.hidden_dim(), HIDDEN_SIZE);
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn rnn_builder() {
+    const INPUT_SIZE: i64 = 2;
+    const HIDDEN_SIZE: i64 = 3;
+    const BIDIRECTIONAL: bool = true;
+    const WITH_BIAS: bool = true;
+
+    let mut builder = nn::RnnBuilder::new(nn::RnnBuilderConfig::default());
+
+    assert_eq!(builder.input_features(), None);
+    assert_eq!(builder.hidden_dim(), None);
+    assert_eq!(builder.output_features(), None);
+    assert_eq!(builder.bidirectional(), None);
+    assert_eq!(builder.has_biases(), None);
+    assert_eq!(builder.num_layers(), 0);
+    assert_eq!(builder.rnn_type(), None);
+    assert!(builder.rnn_config().is_none());
+
+    builder
+        .push(make_layer(
+            nn::RnnType::Gru,
+            INPUT_SIZE,
+            HIDDEN_SIZE,
+            WITH_BIAS,
+            BIDIRECTIONAL,
+        ))
+        .unwrap();
+
+    assert_eq!(builder.input_features(), Some(INPUT_SIZE));
+    assert_eq!(builder.hidden_dim(), Some(HIDDEN_SIZE));
+    assert_eq!(
+        builder.output_features(),
+        Some(HIDDEN_SIZE * if BIDIRECTIONAL { 2 } else { 1 })
+    );
+    assert_eq!(builder.bidirectional(), Some(BIDIRECTIONAL));
+    assert_eq!(builder.has_biases(), Some(WITH_BIAS));
+    assert_eq!(builder.num_layers(), 1);
+    assert_eq!(builder.rnn_type(), Some(nn::RnnType::Gru));
+    let config = builder.rnn_config().unwrap();
+    assert_eq!(config.has_biases, WITH_BIAS);
+    assert_eq!(config.num_layers, 1);
+    assert_eq!(config.bidirectional, BIDIRECTIONAL);
+
+    builder
+        .push(make_layer(
+            nn::RnnType::Gru,
+            HIDDEN_SIZE * if BIDIRECTIONAL { 2 } else { 1 },
+            HIDDEN_SIZE,
+            WITH_BIAS,
+            BIDIRECTIONAL,
+        ))
+        .unwrap();
+
+    assert_eq!(builder.input_features(), Some(INPUT_SIZE));
+    assert_eq!(builder.hidden_dim(), Some(HIDDEN_SIZE));
+    assert_eq!(
+        builder.output_features(),
+        Some(HIDDEN_SIZE * if BIDIRECTIONAL { 2 } else { 1 })
+    );
+    assert_eq!(builder.bidirectional(), Some(BIDIRECTIONAL));
+    assert_eq!(builder.has_biases(), Some(WITH_BIAS));
+    assert_eq!(builder.num_layers(), 2);
+    assert_eq!(builder.rnn_type(), Some(nn::RnnType::Gru));
+    let config = builder.rnn_config().unwrap();
+    assert_eq!(config.has_biases, WITH_BIAS);
+    assert_eq!(config.num_layers, 2);
+    assert_eq!(config.bidirectional, BIDIRECTIONAL);
+
+    assert!(builder
+        .push(make_layer(nn::RnnType::Lstm, 6, 3, true, true))
+        .is_err());
+    assert!(builder
+        .push(make_layer(nn::RnnType::Gru, 4, 3, true, true))
+        .is_err());
+    assert!(builder
+        .push(make_layer(nn::RnnType::Gru, 6, 4, true, true))
+        .is_err());
+    assert!(builder
+        .push(make_layer(nn::RnnType::Gru, 6, 3, false, true))
+        .is_err());
+    assert!(builder
+        .push(make_layer(nn::RnnType::Gru, 6, 3, true, false))
+        .is_err());
+
+    let rnn = builder.gru().unwrap();
+
+    const BATCH_SIZE: i64 = 5;
+    const TIMESTEPS: i64 = 7;
+
+    let x = Tensor::randn(
+        &[BATCH_SIZE, TIMESTEPS, INPUT_SIZE],
+        (Kind::Float, Device::Cpu),
+    );
+
+    use nn::RNN;
+    let (y, h) = rnn.seq(&x);
+
+    const NUM_LAYERS: i64 = 2;
+
+    assert_eq!(
+        y.size(),
+        [
+            BATCH_SIZE,
+            TIMESTEPS,
+            HIDDEN_SIZE * if BIDIRECTIONAL { 2 } else { 1 }
+        ]
+    );
+    assert_eq!(
+        h.0.size(),
+        [
+            NUM_LAYERS * if BIDIRECTIONAL { 2 } else { 1 },
+            BATCH_SIZE,
+            HIDDEN_SIZE
+        ]
+    );
+}
