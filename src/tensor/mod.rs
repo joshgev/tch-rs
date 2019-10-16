@@ -315,6 +315,9 @@ impl<T: crate::kind::T> From<T> for Tensor {
 
 impl std::fmt::Debug for Tensor {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        if !self.defined() {
+            return write!(f, "Tensor[[], Undefined]");
+        }
         let (is_int, is_float) = match self.kind() {
             Kind::Int | Kind::Int8 | Kind::Uint8 | Kind::Int16 | Kind::Int64 => (true, false),
             Kind::Half | Kind::Float | Kind::Double => (false, true),
@@ -529,6 +532,11 @@ impl<'a> std::iter::Sum<&'a Tensor> for Tensor {
 
 impl PartialEq for Tensor {
     fn eq(&self, other: &Tensor) -> bool {
+        if !self.defined() {
+            return !other.defined() || other.numel() == 0;
+        } else if !other.defined() {
+            return self.numel() == 0;
+        }
         if self.size() != other.size() {
             return false;
         }

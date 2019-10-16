@@ -272,3 +272,25 @@ fn copy_overflow() {
     let r = Tensor::zeros(&[10000], (tch::Kind::Int8, Device::Cpu)).f_copy_data(&mut s, 10000);
     assert!(r.is_err());
 }
+
+#[test]
+fn undefined() {
+    let x = Tensor::default();
+    assert!(!x.defined());
+    assert_eq!(x, Tensor::new());
+    assert_eq!(Tensor::default(), x);
+
+    let y = Tensor::of_slice(&[0]);
+    assert!(y.defined());
+    assert_eq!(y, Tensor::of_slice(&[0]));
+    assert_ne!(y, Tensor::of_slice(&[1]));
+
+    assert_ne!(x, y);
+    assert_ne!(y, x);
+
+    let z = Tensor::of_slice::<f32>(&[]);
+    assert_eq!(z, x);
+    assert_eq!(x, z);
+    assert_ne!(z, y);
+    assert_ne!(y, z);
+}
