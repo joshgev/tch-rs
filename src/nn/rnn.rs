@@ -98,6 +98,69 @@ pub struct LSTM {
     device: Device,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Direction {
+    Forward,
+    Reverse,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Type {
+    Weight,
+    Bias,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Order {
+    Ih,
+    Hh,
+}
+
+impl LSTM {
+    pub fn tensor(&self, layer: usize, direction: Direction, type_: Type, order: Order) -> Option<&Tensor> {
+        if layer >= self.config.num_layers as usize {
+            return None;
+        }
+
+        if !self.config.bidirectional && direction == Direction::Reverse {
+            return None;
+        }
+        let num_directions = if self.config.bidirectional { 2 } else { 1 };
+
+        let bias_included = if self.config.num_layers as usize * num_directions == self.flat_weights.len() * 4 {
+            true
+        } else if self.config.num_layers as usize * num_directions == self.flat_weights.len() * 2 {
+            false
+        } else {
+            panic!("Inconsistent number of weights.");
+        };
+
+        if type_ == Type::Bias && (!bias_included || !self.config.has_biases) {
+            return None;
+        }
+
+        let tensors_per_direction = if bias_included { 4 } else { 2 };
+
+        let layer_offset = layer * (num_directions * tensors_per_direction);
+        let direction_offset = match direction {
+            Direction::Forward => 0,
+            Direction::Reverse => tensors_per_direction,
+        };
+        let type_offset = match type_ {
+            Type::Weight => 0,
+            Type::Bias => 2,
+        };
+        let order_offset = match order {
+            Order::Ih => 0,
+            Order::Hh => 1,
+        };
+
+        let index = layer_offset + direction_offset + type_offset + order_offset;
+
+        Some(&self.flat_weights[index])
+    }
+}
+
 /// Creates a LSTM layer.
 pub fn lstm(vs: &super::var_store::Path, in_dim: i64, hidden_dim: i64, c: RNNConfig) -> LSTM {
     let num_directions = if c.bidirectional { 2 } else { 1 };
@@ -231,6 +294,51 @@ pub struct GRU {
     hidden_dim: i64,
     config: RNNConfig,
     device: Device,
+}
+
+impl GRU {
+    pub fn tensor(&self, layer: usize, direction: Direction, type_: Type, order: Order) -> Option<&Tensor> {
+        if layer >= self.config.num_layers as usize {
+            return None;
+        }
+
+        if !self.config.bidirectional && direction == Direction::Reverse {
+            return None;
+        }
+        let num_directions = if self.config.bidirectional { 2 } else { 1 };
+
+        let bias_included = if self.config.num_layers as usize * num_directions == self.flat_weights.len() * 4 {
+            true
+        } else if self.config.num_layers as usize * num_directions == self.flat_weights.len() * 2 {
+            false
+        } else {
+            panic!("Inconsistent number of weights.");
+        };
+
+        if type_ == Type::Bias && (!bias_included || !self.config.has_biases) {
+            return None;
+        }
+
+        let tensors_per_direction = if bias_included { 4 } else { 2 };
+
+        let layer_offset = layer * (num_directions * tensors_per_direction);
+        let direction_offset = match direction {
+            Direction::Forward => 0,
+            Direction::Reverse => tensors_per_direction,
+        };
+        let type_offset = match type_ {
+            Type::Weight => 0,
+            Type::Bias => 2,
+        };
+        let order_offset = match order {
+            Order::Ih => 0,
+            Order::Hh => 1,
+        };
+
+        let index = layer_offset + direction_offset + type_offset + order_offset;
+
+        Some(&self.flat_weights[index])
+    }
 }
 
 /// Creates a new GRU layer.
