@@ -1,5 +1,5 @@
 use std::convert::{TryFrom, TryInto};
-use tch::{Device, IndexOp, Tensor};
+use tch::{Device, IndexOp, Tensor, Kind};
 
 #[test]
 fn assign_ops() {
@@ -304,4 +304,13 @@ fn test_clone() {
     assert_eq!(y, Tensor::of_slice(&[0, 2, 3]));
     assert_eq!(x, Tensor::of_slice(&[1, 2, 3]));
     assert_ne!(x, y);
+}
+
+#[test]
+fn binary_ops_mixed_type() {
+    let x = Tensor::of_slice(&[1.0, 2.0, 3.0]).to_kind(Kind::Float);
+    let y = Tensor::of_slice(&[1.0, 2.0, 3.0]).to_kind(Kind::Double);
+    let z = Tensor::of_slice(&[0, 0, 0]);
+    let d = x - y;
+    assert_eq!(d, z);
 }
