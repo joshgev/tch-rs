@@ -56,6 +56,12 @@ impl ToDevice for LSTMState {
     }
 }
 
+impl AsView for LSTMState {
+    fn as_view(&self) -> Self {
+        Self(((self.0).0.as_view(), (self.0).1.as_view()))
+    }
+}
+
 // The GRU and LSTM layers share the same config.
 /// Configuration for the GRU and LSTM layers.
 #[derive(Debug, Clone, Copy)]
@@ -207,6 +213,12 @@ impl ToDevice for GRUState {
 
     fn device(&self) -> Device {
         self.0.device()
+    }
+}
+
+impl AsView for GRUState {
+    fn as_view(&self) -> Self {
+        Self(self.0.as_view())
     }
 }
 
