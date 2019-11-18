@@ -9,7 +9,7 @@ mod iter;
 mod npy;
 
 pub use super::wrappers::tensor::{no_grad, no_grad_guard, NoGradGuard, Reduction, Tensor};
-pub use index::{IndexOp, NewAxis, TensorIndexer};
+pub use index::{IndexOp, NewAxis, TensorIndexer, SelectIndex};
 
 macro_rules! impl_op {
     ($trait:ident, $func:ident, $op:ident) => {

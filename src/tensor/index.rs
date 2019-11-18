@@ -69,6 +69,8 @@ pub enum TensorIndexer {
     InsertNewAxis,
 }
 
+pub struct SelectIndex<T>(pub T);
+
 impl From<NewAxis> for TensorIndexer {
     fn from(_index: NewAxis) -> Self {
         TensorIndexer::InsertNewAxis
@@ -142,6 +144,15 @@ where
 {
     fn i(&self, index: A) -> Tensor {
         self.indexer(&[index.into()])
+    }
+}
+
+impl<T> IndexOp<SelectIndex<T>> for Tensor
+where
+    T: AsRef<[i64]>,
+{
+    fn i(&self, index: SelectIndex<T>) -> Tensor {
+        self.indexer(&index.0.as_ref().iter().copied().map(Into::into).collect::<Vec<_>>())
     }
 }
 

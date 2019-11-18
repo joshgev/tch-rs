@@ -18,7 +18,7 @@ pub use wrappers::AsView;
 
 mod tensor;
 pub use tensor::{
-    index, no_grad, no_grad_guard, IndexOp, NewAxis, NoGradGuard, Reduction, Tensor, TensorIndexer,
+    index, no_grad, no_grad_guard, IndexOp, SelectIndex, NewAxis, NoGradGuard, Reduction, Tensor, TensorIndexer,
 };
 
 pub mod nn;

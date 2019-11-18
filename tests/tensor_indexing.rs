@@ -1,5 +1,42 @@
 use tch::{Device, Kind, Tensor};
-use tch::{IndexOp, NewAxis};
+use tch::{IndexOp, NewAxis, SelectIndex};
+
+#[test]
+fn select_index() {
+    let opt = (Kind::Float, Device::Cpu);
+
+    // [0, 1, 2]
+    // [3, 4, 5]
+    // [6, 7, 8]
+    // [9, 10, 11]
+
+    let tensor = Tensor::arange1(0, 4 * 3, opt).view([4, 3]);
+
+    // 1-tuple select
+    let result = tensor.i((2, ));
+    assert_eq!(result.size(), [3]);
+    assert_eq!(result, Tensor::of_slice(&[6, 7, 8]));
+
+    // SelectIndex select, row
+    let result = tensor.i(SelectIndex(vec![2]));
+    assert_eq!(result.size(), [3]);
+    assert_eq!(result, Tensor::of_slice(&[6, 7, 8]));
+
+    // 2-tuple select, row
+    let result = tensor.i((2, ..));
+    assert_eq!(result.size(), [3]);
+    assert_eq!(result, Tensor::of_slice(&[6, 7, 8]));
+
+    // 2-tuple select, scalar
+    let result = tensor.i((2, 1));
+    assert_eq!(result.size(), []);
+    assert_eq!(result, Tensor::from(7));
+
+    // SelectIndex select, scalar
+    let result = tensor.i(SelectIndex(vec![2, 1]));
+    assert_eq!(result.size(), []);
+    assert_eq!(result, Tensor::from(7));
+}
 
 #[test]
 fn integer_index() {
