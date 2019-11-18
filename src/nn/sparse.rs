@@ -35,6 +35,40 @@ pub struct Embedding {
     config: EmbeddingConfig,
 }
 
+pub struct EmbeddingConfigFromParts {
+    pub sparse: bool,
+    pub scale_grad_by_freq: bool,
+    pub padding_idx: i64,
+}
+
+impl Default for EmbeddingConfigFromParts {
+    fn default() -> Self {
+        Self {
+            sparse: EmbeddingConfig::default().sparse,
+            scale_grad_by_freq: EmbeddingConfig::default().scale_grad_by_freq,
+            padding_idx: EmbeddingConfig::default().padding_idx,
+        }
+    }
+}
+
+impl Embedding {
+    pub fn embedding_dim(&self) -> i64 {
+        self.ws.size2().unwrap().1
+    }
+
+    pub fn from_parts(ws: Tensor, config: EmbeddingConfigFromParts) -> Self {
+        Self {
+            ws,
+            config: EmbeddingConfig {
+                sparse: config.sparse,
+                scale_grad_by_freq: config.scale_grad_by_freq,
+                padding_idx: config.padding_idx,
+                ws_init: super::Init::Const(0.),
+            },
+        }
+    }
+}
+
 pub fn embedding<'a, T: Borrow<super::Path<'a>>>(
     vs: T,
     num_embeddings: i64,
