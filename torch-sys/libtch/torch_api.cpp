@@ -16,8 +16,35 @@
 
 using namespace std;
 
+void at_get_parallel_info(char** info) {
+    std::string x = at::get_parallel_info();
+    *info = new char[x.size()+1];
+    std::strcpy(*info, x.c_str());
+}
+
+void at_free_parallel_info(char** info) {
+    delete [] *info;
+    *info = 0;
+}
+
 void at_init_all() {
     at::init_num_threads();
+}
+
+bool at_has_openmp() {
+    return at::hasOpenMP();
+}
+
+bool at_has_mkl() {
+    return at::hasMKL();
+}
+
+bool at_has_lapack() {
+    return at::hasLAPACK();
+}
+
+bool at_has_mkldnn() {
+    return at::hasMKLDNN();
 }
 
 char *get_and_reset_last_err() {

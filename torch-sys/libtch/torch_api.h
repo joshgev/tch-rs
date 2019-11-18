@@ -26,6 +26,12 @@ typedef void *ivalue;
 #endif
 
 void at_init_all();
+bool at_has_openmp();
+bool at_has_mkl();
+bool at_has_lapack();
+bool at_has_mkldnn();
+void at_get_parallel_info(char** info);
+void at_free_parallel_info(char** info);
 
 char *get_and_reset_last_err(); // thread-local
 void at_manual_seed(int64_t);
