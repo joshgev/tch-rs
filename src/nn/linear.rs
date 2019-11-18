@@ -25,6 +25,16 @@ pub struct Linear {
     pub bs: Tensor,
 }
 
+impl Linear {
+    pub fn out_dim(&self) -> i64 {
+        self.ws.size2().unwrap().0
+    }
+
+    pub fn in_dim(&self) -> i64 {
+        self.ws.size2().unwrap().1
+    }
+}
+
 /// Creates a new linear layer.
 pub fn linear<'a, T: Borrow<super::Path<'a>>>(
     vs: T,
