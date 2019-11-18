@@ -351,3 +351,18 @@ fn rnn_builder() {
         ]
     );
 }
+
+#[test]
+fn embedding() {
+    let ws = Tensor::of_slice(&[1.0, 2.3, 3.0, 4.0, 5.1, 6.3]).view([2, 3]);
+    let embedding = nn::Embedding::from_parts(ws, nn::EmbeddingConfigFromParts {
+        padding_idx: -1,
+        scale_grad_by_freq: false,
+        sparse: false,
+    });
+
+    let input = Tensor::of_slice(&[1]).to_kind(Kind::Int64);
+    let actual = embedding.forward(&input);
+    let expected = Tensor::of_slice(&[4.0, 5.1, 6.3]).view([1, 3]);
+    assert!(f32::from((actual - expected).abs().max()) < 0.001);
+}
