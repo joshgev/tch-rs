@@ -20,6 +20,7 @@ pub struct C_tensor {
 }
 
 extern "C" {
+    pub fn at_init_all();
     pub fn at_new_tensor() -> *mut C_tensor;
     pub fn at_shallow_clone(arg: *mut C_tensor) -> *mut C_tensor;
     pub fn at_copy_(dst: *mut C_tensor, src: *mut C_tensor);

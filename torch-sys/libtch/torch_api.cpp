@@ -16,6 +16,10 @@
 
 using namespace std;
 
+void at_init_all() {
+    at::init_num_threads();
+}
+
 char *get_and_reset_last_err() {
     char *tmp = torch_last_err;
     torch_last_err = nullptr;

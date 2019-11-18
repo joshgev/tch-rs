@@ -28,3 +28,7 @@ pub mod kind {
     pub(crate) use super::wrappers::kind::T;
     pub use super::wrappers::kind::*;
 }
+
+pub fn init_all() {
+    unsafe { torch_sys::at_init_all() }
+}

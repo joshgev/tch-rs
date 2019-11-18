@@ -25,6 +25,8 @@ typedef void *module;
 typedef void *ivalue;
 #endif
 
+void at_init_all();
+
 char *get_and_reset_last_err(); // thread-local
 void at_manual_seed(int64_t);
 tensor at_new_tensor();
