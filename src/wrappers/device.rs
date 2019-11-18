@@ -70,5 +70,18 @@ impl Device {
 /// If the object is already on the given device, then it is sufficient to
 /// return a shallow copy.
 pub trait ToDevice {
+    fn device(&self) -> Device;
     fn to_device(&self, device: Device) -> Self;
+    fn cpu(&self) -> Self
+    where
+        Self: Sized
+    {
+        self.to_device(Device::Cpu)
+    }
+    fn gpu(&self, device: usize) -> Self
+    where
+        Self: Sized
+    {
+        self.to_device(Device::Cuda(device))
+    }
 }

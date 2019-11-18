@@ -46,6 +46,16 @@ impl LSTMState {
     }
 }
 
+impl ToDevice for LSTMState {
+    fn to_device(&self, device: Device) -> Self {
+        Self(((self.0).0.to_device(device), (self.0).1.to_device(device)))
+    }
+
+    fn device(&self) -> Device {
+        (self.0).0.device()
+    }
+}
+
 // The GRU and LSTM layers share the same config.
 /// Configuration for the GRU and LSTM layers.
 #[derive(Debug, Clone, Copy)]
@@ -159,6 +169,10 @@ impl ToDevice for LSTM {
             device,
         }
     }
+
+    fn device(&self) -> Device {
+        self.device
+    }
 }
 
 impl AsView for LSTM {
@@ -183,6 +197,16 @@ pub struct GRUState(pub Tensor);
 impl GRUState {
     pub fn value(&self) -> Tensor {
         self.0.shallow_clone()
+    }
+}
+
+impl ToDevice for GRUState {
+    fn to_device(&self, device: Device) -> Self {
+        Self(self.0.to_device(device))
+    }
+
+    fn device(&self) -> Device {
+        self.0.device()
     }
 }
 
@@ -271,6 +295,10 @@ impl ToDevice for GRU {
             config: self.config,
             device,
         }
+    }
+
+    fn device(&self) -> Device {
+        self.device
     }
 }
 

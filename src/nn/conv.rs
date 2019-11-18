@@ -201,6 +201,10 @@ where
             config: self.config.clone(),
         }
     }
+
+    fn device(&self) -> Device {
+        self.ws.device()
+    }
 }
 
 impl<ND> AsView for Conv<ND>

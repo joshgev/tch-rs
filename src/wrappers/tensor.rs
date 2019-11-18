@@ -459,6 +459,10 @@ impl ToDevice for Tensor {
     fn to_device(&self, device: Device) -> Self {
         Tensor::to_device(self, device)
     }
+
+    fn device(&self) -> Device {
+        self.device()
+    }
 }
 
 impl AsView for Tensor {

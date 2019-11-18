@@ -71,4 +71,8 @@ impl ToDevice for Embedding {
             config: self.config,
         }
     }
+
+    fn device(&self) -> Device {
+        self.ws.device()
+    }
 }

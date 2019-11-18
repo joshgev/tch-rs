@@ -59,6 +59,10 @@ impl ToDevice for Linear {
             bs: self.bs.to_device(device),
         }
     }
+
+    fn device(&self) -> Device {
+        self.ws.device()
+    }
 }
 
 impl AsView for Linear {

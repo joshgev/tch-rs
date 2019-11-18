@@ -129,6 +129,10 @@ impl ToDevice for BatchNorm {
             nd: self.nd,
         }
     }
+
+    fn device(&self) -> Device {
+        self.ws.device()
+    }
 }
 
 impl AsView for BatchNorm {
