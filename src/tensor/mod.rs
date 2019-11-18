@@ -510,6 +510,16 @@ impl Tensor {
         result.copy_(&self);
         result
     }
+
+    pub fn size_of(&self, mut dim: i64) -> i64 {
+        if dim < 0 {
+            dim += self.dim() as i64;
+        }
+        if dim < 0 {
+            panic!("Dimension cannot be less than -N, where N is the number of dimensions.");
+        }
+        self.size()[dim as usize]
+    }
 }
 
 impl std::iter::Sum for Tensor {

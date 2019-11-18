@@ -376,6 +376,10 @@ impl Tensor {
             Some(s) => Ok(s),
         }
     }
+
+    pub fn all_close(&self, other: &Tensor, tolerance: f64) -> bool {
+        f64::from((self - other).abs().max()) < tolerance
+    }
 }
 
 impl Default for Tensor {
