@@ -29,7 +29,7 @@ impl Default for EmbeddingConfig {
 ///
 /// An embedding layer acts as a simple lookup table that stores embeddings.
 /// This is commonly used to store word embeddings.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Embedding {
     pub ws: Tensor,
     config: EmbeddingConfig,

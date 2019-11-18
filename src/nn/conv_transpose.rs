@@ -35,7 +35,7 @@ impl Default for ConvTransposeConfig {
 }
 
 /// A generic transposed convolution layer.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ConvTransposeND<ND> {
     pub ws: Tensor,
     pub bs: Option<Tensor>,

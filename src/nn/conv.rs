@@ -56,7 +56,7 @@ pub fn no_bias() -> ConvConfig {
 
 // Use const generics when they have landed in stable rust.
 /// A N-dimensional convolution layer.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Conv<ND> {
     pub ws: Tensor,
     pub bs: Option<Tensor>,

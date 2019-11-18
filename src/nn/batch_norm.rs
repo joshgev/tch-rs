@@ -25,7 +25,7 @@ impl Default for BatchNormConfig {
 }
 
 /// A batch-normalization layer.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BatchNorm {
     config: BatchNormConfig,
     pub running_mean: Tensor,

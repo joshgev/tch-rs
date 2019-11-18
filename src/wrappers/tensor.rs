@@ -470,3 +470,9 @@ impl AsView for Tensor {
         self.shallow_clone()
     }
 }
+
+impl Clone for Tensor {
+    fn clone(&self) -> Self {
+        self.copy()
+    }
+}

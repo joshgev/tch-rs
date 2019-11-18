@@ -1,5 +1,5 @@
 use std::convert::{TryFrom, TryInto};
-use tch::{Device, Tensor};
+use tch::{Device, IndexOp, Tensor};
 
 #[test]
 fn assign_ops() {
@@ -293,4 +293,15 @@ fn undefined() {
     assert_eq!(x, z);
     assert_ne!(z, y);
     assert_ne!(y, z);
+}
+
+#[test]
+fn test_clone() {
+    let x = Tensor::of_slice(&[1, 2, 3]);
+    let y = x.clone();
+    assert_eq!(x, y);
+    y.i((0,)).copy_(&0.into());
+    assert_eq!(y, Tensor::of_slice(&[0, 2, 3]));
+    assert_eq!(x, Tensor::of_slice(&[1, 2, 3]));
+    assert_ne!(x, y);
 }

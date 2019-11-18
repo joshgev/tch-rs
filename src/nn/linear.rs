@@ -19,7 +19,7 @@ impl Default for LinearConfig {
 }
 
 /// A linear fully-connected layer.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Linear {
     pub ws: Tensor,
     pub bs: Tensor,

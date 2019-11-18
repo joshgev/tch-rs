@@ -31,7 +31,7 @@ pub trait RNN {
 }
 
 /// The state for a LSTM network, this contains two tensors.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct LSTMState(pub (Tensor, Tensor));
 
 impl LSTMState {
@@ -84,7 +84,7 @@ impl Default for RNNConfig {
 /// A Long Short-Term Memory (LSTM) layer.
 ///
 /// https://en.wikipedia.org/wiki/Long_short-term_memory
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct LSTM {
     flat_weights: Vec<Tensor>,
     hidden_dim: i64,
@@ -191,7 +191,7 @@ impl AsView for LSTM {
 }
 
 /// A GRU state, this contains a single tensor.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct GRUState(pub Tensor);
 
 impl GRUState {
@@ -213,7 +213,7 @@ impl ToDevice for GRUState {
 /// A Gated Recurrent Unit (GRU) layer.
 ///
 /// https://en.wikipedia.org/wiki/Gated_recurrent_unit
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct GRU {
     flat_weights: Vec<Tensor>,
     hidden_dim: i64,
