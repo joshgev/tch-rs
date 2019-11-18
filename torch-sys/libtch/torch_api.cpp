@@ -119,6 +119,13 @@ size_t at_dim(tensor t) {
   return -1;
 }
 
+void at_strides(tensor t, int64_t *dims) {
+  PROTECT(
+    int i = 0;
+    for (int64_t dim : t->strides()) dims[i++] = dim;
+  )
+}
+
 void at_shape(tensor t, int64_t *dims) {
   PROTECT(
     int i = 0;

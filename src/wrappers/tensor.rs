@@ -46,6 +46,14 @@ impl Tensor {
         sz
     }
 
+    /// Returns the stride of the input tensor.
+    pub fn stride(&self) -> Vec<i64> {
+        let dim = unsafe_torch!({ at_dim(self.c_tensor) });
+        let mut sz = vec![0i64; dim];
+        unsafe_torch!({ at_strides(self.c_tensor, sz.as_mut_ptr()) });
+        sz
+    }
+
     /// Returns the tensor size for single dimension tensors.
     pub fn size1(&self) -> Fallible<i64> {
         match self.size().as_slice() {

@@ -44,6 +44,7 @@ int at_defined(tensor);
 int at_device(tensor);
 size_t at_dim(tensor);
 void at_shape(tensor, int64_t *);
+void at_strides(tensor, int64_t *);
 int at_scalar_type(tensor);
 
 void at_backward(tensor, int, int);
