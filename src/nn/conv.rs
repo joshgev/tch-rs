@@ -1,6 +1,7 @@
 //! N-dimensional convolution layers.
 use super::Path;
 use crate::{AsView, Device, Tensor, ToDevice};
+use failure::{err_msg, Error};
 use std::borrow::Borrow;
 
 /// Generic convolution config.
@@ -61,6 +62,94 @@ pub struct Conv<ND> {
     pub ws: Tensor,
     pub bs: Option<Tensor>,
     config: ConvConfigND<ND>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct ConvBuilderConfig<ND> {
+    pub stride: ND,
+    pub padding: ND,
+    pub dilation: ND,
+    pub groups: i64,
+}
+
+impl<ND> Conv<ND> {
+    pub fn from_parts(ws: Tensor, bs: Option<Tensor>, config: ConvBuilderConfig<ND>) -> Result<Self, Error> {
+        let bias = bs.is_some();
+        Ok(Self {
+            ws,
+            bs,
+            config: ConvConfigND {
+                stride: config.stride,
+                padding: config.padding,
+                dilation: config.dilation,
+                groups: config.groups,
+                bias,
+                ws_init: super::Init::Const(0.),
+                bs_init: super::Init::Const(0.),
+            },
+        })
+    }
+
+    pub fn in_dim(&self) -> i64 {
+        self.ws.size()[1] * self.config.groups
+    }
+
+    pub fn config(&self) -> &ConvConfigND<ND> {
+        &self.config
+    }
+}
+
+pub trait CnnWeights {
+    fn ksizes(&self) -> Vec<i64>;
+    fn out_dim(&self) -> i64;
+    fn padding(&self, padding: Padding) -> Result<Vec<i64>, Error>;
+}
+
+impl<ND> CnnWeights for Conv<ND> {
+    fn ksizes(&self) -> Vec<i64> {
+        self.ws.ksizes()
+    }
+    fn out_dim(&self) -> i64 {
+        self.ws.out_dim()
+    }
+    fn padding(&self, padding: Padding) -> Result<Vec<i64>, Error> {
+        self.ws.padding(padding)
+    }
+}
+
+impl CnnWeights for Tensor {
+    fn ksizes(&self) -> Vec<i64> {
+        self.size().split_off(2)
+    }
+    fn out_dim(&self) -> i64 {
+        self.size()[0]
+    }
+    fn padding(&self, padding: Padding) -> Result<Vec<i64>, Error> {
+        padding.padding(self.ksizes())
+    }
+}
+
+pub enum Padding {
+    Same,
+    Valid,
+}
+
+impl Padding {
+    fn padding(self, ksizes: Vec<i64>) -> Result<Vec<i64>, Error> {
+        match self {
+            Padding::Same => {
+                ksizes
+                    .into_iter()
+                    .map(|x| if x % 2 == 1 {
+                        Ok(x / 2)
+                    } else {
+                        Err(err_msg("Padding::Same requires an odd kernel size."))
+                    })
+                    .collect::<Result<Vec<_>, _>>()
+            }
+            Padding::Valid => Ok(vec![0; ksizes.len()]),
+        }
+    }
 }
 
 /// One dimension convolution layer.
