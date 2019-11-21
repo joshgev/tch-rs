@@ -170,6 +170,11 @@ fn cmake<P: AsRef<Path>>(libtorch: P) {
 }
 
 fn main() {
+    println!("cargo:rerun-if-env-changed=TORCH_CUDA_VERSION");
+    println!("cargo:rerun-if-env-changed=LIBTORCH");
+    println!("cargo:rerun-if-env-changed=LIBTORCH_CXX11_ABI");
+    println!("cargo:rerun-if-env-changed=LIBTORCH_USE_CMAKE");
+
     let libtorch = prepare_libtorch_dir();
     println!(
         "cargo:rustc-link-search=native={}",
