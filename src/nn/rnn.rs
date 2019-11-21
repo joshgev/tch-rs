@@ -127,9 +127,9 @@ impl LSTM {
         }
         let num_directions = if self.config.bidirectional { 2 } else { 1 };
 
-        let bias_included = if self.config.num_layers as usize * num_directions == self.flat_weights.len() * 4 {
+        let bias_included = if self.config.num_layers as usize * num_directions * 4 == self.flat_weights.len() {
             true
-        } else if self.config.num_layers as usize * num_directions == self.flat_weights.len() * 2 {
+        } else if self.config.num_layers as usize * num_directions * 2 == self.flat_weights.len() {
             false
         } else {
             panic!("Inconsistent number of weights.");
