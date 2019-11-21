@@ -35,11 +35,18 @@ impl Tensor {
 
     /// Returns the number of dimension of the tensor.
     pub fn dim(&self) -> usize {
-        unsafe_torch!({ at_dim(self.c_tensor) })
+        if !self.defined() {
+            0
+        } else {
+            unsafe_torch!({ at_dim(self.c_tensor) })
+        }
     }
 
     /// Returns the shape of the input tensor.
     pub fn size(&self) -> Vec<i64> {
+        if !self.defined() {
+            return Default::default();
+        }
         let dim = unsafe_torch!({ at_dim(self.c_tensor) });
         let mut sz = vec![0i64; dim];
         unsafe_torch!({ at_shape(self.c_tensor, sz.as_mut_ptr()) });
@@ -48,6 +55,9 @@ impl Tensor {
 
     /// Returns the stride of the input tensor.
     pub fn stride(&self) -> Vec<i64> {
+        if !self.defined() {
+            return Default::default();
+        }
         let dim = unsafe_torch!({ at_dim(self.c_tensor) });
         let mut sz = vec![0i64; dim];
         unsafe_torch!({ at_strides(self.c_tensor, sz.as_mut_ptr()) });
@@ -238,7 +248,11 @@ impl Tensor {
 
     /// Returns the total number of elements stored in a tensor.
     pub fn numel(&self) -> usize {
-        self.size().iter().product::<i64>() as usize
+        if !self.defined() {
+            0
+        } else {
+            self.size().iter().product::<i64>() as usize
+        }
     }
 
     // This is similar to vec_... but faster as it directly blits the data.
