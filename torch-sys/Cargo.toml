@@ -21,3 +21,10 @@ cmake = "0.1"
 curl = "0.4.9"
 failure = "0.1"
 zip = "0.5"
+
+[features]
+
+default = []
+
+cuda92 = []
+cuda101 = []

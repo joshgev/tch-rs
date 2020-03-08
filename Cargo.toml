@@ -28,6 +28,9 @@ members = ["torch-sys"]
 [features]
 python = ["cpython"]
 
+cuda92 = ["torch-sys/cuda92"]
+cuda101 = ["torch-sys/cuda101"]
+
 [[example]]
 name = "reinforcement-learning"
 required-features = ["python"]

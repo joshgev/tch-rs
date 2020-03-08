@@ -32,6 +32,7 @@ bool at_has_lapack();
 bool at_has_mkldnn();
 void at_get_parallel_info(char** info);
 void at_free_parallel_info(char** info);
+bool at_cudnn_is_acceptable(tensor);
 
 char *get_and_reset_last_err(); // thread-local
 void at_manual_seed(int64_t);

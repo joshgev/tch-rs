@@ -18,6 +18,7 @@ pub struct Tensor {
 }
 
 unsafe impl Send for Tensor {}
+unsafe impl Sync for Tensor {}
 
 extern "C" fn add_callback(data: *mut c_void, name: *const c_char, c_tensor: *mut C_tensor) {
     let name = unsafe { std::ffi::CStr::from_ptr(name).to_str().unwrap() };
@@ -401,6 +402,10 @@ impl Tensor {
 
     pub fn all_close(&self, other: &Tensor, tolerance: f64) -> bool {
         f64::from((self - other).abs().max()) < tolerance
+    }
+
+    pub fn cudnn_is_acceptable(&self) -> bool {
+        unsafe_torch!({ at_cudnn_is_acceptable(self.c_tensor) })
     }
 }
 

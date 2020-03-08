@@ -13,6 +13,9 @@ use std::fs;
 use std::io;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::borrow::{Cow, Borrow};
+use std::process::Command;
+use std::os::unix::fs::PermissionsExt;
 
 use cmake::Config;
 use curl::easy::Easy;
@@ -20,6 +23,84 @@ use failure::Fallible;
 use zip;
 
 const TORCH_VERSION: &'static str = "1.3.1";
+
+fn find_executable<P: AsRef<Path>>(name: P) -> Option<PathBuf> {
+    env::var_os("PATH").and_then(|paths| {
+        env::split_paths(&paths)
+            .filter_map(|dir| {
+                let full_path = dir.join(&name);
+                if full_path.is_file()
+                    && full_path
+                        .metadata()
+                        .map(|m| m.permissions().mode() & 0o111 != 0)
+                        .is_ok()
+                {
+                    Some(full_path)
+                } else {
+                    None
+                }
+            })
+            .next()
+    })
+}
+
+fn find_cuda_root() -> Option<PathBuf> {
+    find_executable("nvcc")
+        .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+        .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+        .or_else(|| {
+            let p = Path::new("/usr").join("local").join("cuda");
+            if p.is_dir() {
+                return Some(p);
+            }
+            let p = Path::new("/opt").join("cuda");
+            if p.is_dir() {
+                return Some(p);
+            }
+            None
+        })
+        .map(|x| x.to_path_buf())
+}
+
+/// Given the full filename for a library (e.g., "libc.a" or "libc.so"), this
+/// asks the compiler to find the library and, if found, will add it to the
+/// cargo search path and then return `true`. If no such library is found by
+/// the compiler, `false` is returned.
+fn add_search_directory_for_library(name: &str) -> bool {
+    if let Some(path) = find_library(name) {
+        if let Some(path) = path.parent() {
+            println!("cargo:rustc-link-search={}", path.display());
+            return true;
+        }
+    }
+    false
+}
+
+fn find_library(name: &str) -> Option<PathBuf> {
+    let output = Command::new(
+            cc::Build::new().get_compiler().path()
+        )
+        .arg(&format!("-print-file-name={}", name))
+        .output();
+
+    match output {
+        Ok(output) => {
+            if !output.status.success() {
+                None
+            } else if let Ok(path) = ::std::str::from_utf8(&output.stdout) {
+                let path = path.trim();
+                if path == name {
+                    None
+                } else {
+                    Some(Path::new(path).to_path_buf())
+                }
+            } else {
+                None
+            }
+        }
+        Err(_) => None
+    }
+}
 
 fn download<P: AsRef<Path>>(source_url: &str, target_file: P) -> Fallible<()> {
     let f = fs::File::create(&target_file)?;
@@ -69,8 +150,19 @@ fn extract<P: AsRef<Path>>(filename: P, outpath: P) -> Fallible<()> {
 fn prepare_libtorch_dir() -> PathBuf {
     let os = env::var("CARGO_CFG_TARGET_OS").expect("Unable to get TARGET_OS");
 
-    let device = match env::var("TORCH_CUDA_VERSION") {
-        Ok(cuda_env) => match os.as_str() {
+    let cuda_version = match env::var("TORCH_CUDA_VERSION") {
+        Ok(cuda_env) => Some(Cow::Owned(cuda_env)),
+        Err(_) => if cfg!(feature = "cuda101") {
+                Some(Cow::Borrowed("cu101"))
+            } else if cfg!(feature = "cuda92") {
+                Some(Cow::Borrowed("cu92"))
+            } else {
+                None
+            },
+    };
+
+    let device = match cuda_version.borrow() {
+        Some(cuda_env) => match os.as_str() {
             "linux" => cuda_env
                 .trim()
                 .to_lowercase()
@@ -87,7 +179,7 @@ fn prepare_libtorch_dir() -> PathBuf {
                 os_str
             ),
         },
-        Err(_) => "cpu".to_string(),
+        None => "cpu".to_string(),
     };
 
     if let Ok(libtorch) = env::var("LIBTORCH") {
@@ -187,12 +279,54 @@ fn main() {
         make(&libtorch)
     }
 
-    println!("cargo:rustc-link-lib=torch");
-    println!("cargo:rustc-link-lib=c10");
+    let paths = fs::read_dir(libtorch.join("lib")).expect("Failed to enumerate libraries.");
+    for path in paths {
+        let entry = path.expect("Failed to parse path.");
+        let path = entry.path();
+        if path.is_file() {
+            if path.extension().map(|ext| ext == "so" || ext == "a").unwrap_or(false) {
+                if path.file_name().map(|n| n.to_str().unwrap().starts_with("lib")).unwrap_or(false) {
+                    let p = path.file_stem().unwrap().to_str().unwrap();
+                    println!("cargo:rustc-link-lib={}", p.split_at(3).1);
+                }
+            }
+        }
+    }
+
+    //println!("cargo:rustc-link-lib=torch");
+    //println!("cargo:rustc-link-lib=c10");
 
     let target = env::var("TARGET").unwrap();
 
     if !target.contains("msvc") && !target.contains("apple") {
         println!("cargo:rustc-link-lib=gomp");
+    }
+
+    if cfg!(feature = "cuda92") || cfg!(feature = "cuda101") {
+        let cuda_root = find_cuda_root().expect("Failed to find CUDA root.");
+        eprintln!("Detected CUDA root as: {}", cuda_root.display());
+
+        println!("cargo:rustc-link-lib=cudart");
+	println!("cargo:rustc-link-lib=cudart_static");
+        println!("cargo:rustc-link-lib=cublas");
+        println!("cargo:rustc-link-lib=culibos"); // NO _static
+        println!("cargo:rustc-link-lib=nvToolsExt");
+
+        println!("cargo:rustc-link-search={}", cuda_root.join("lib64").display());
+
+        // CUDA 10.1 moves cuBLAS out of the CUDA toolkit directory and into
+        // the system libraries instead. So we try to find the library and add
+        // it to the Cargo search path. In the case of CUDA 10.1 and beyond,
+        // this will let the linker find cuBLAS; for CUDA 10 and below, this
+        // call will fail to find the library, but that's fine because we
+        // already added the CUDA `lib64` directory just above.
+        add_search_directory_for_library("libcublas.a");
+
+        // CUDA 10.1 also splits cuBLAS into another library: cuBLASLt.
+        if find_library("libcublasLt.a").is_some() {
+            println!("cargo:rustc-link-lib=cublasLt");
+        }
+    } else {
+        eprintln!("CUDA support disabled.");
     }
 }

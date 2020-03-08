@@ -47,6 +47,11 @@ bool at_has_mkldnn() {
     return at::hasMKLDNN();
 }
 
+bool at_cudnn_is_acceptable(tensor tensor) {
+  PROTECT(return cudnn_is_acceptable(*tensor);)
+  return false;
+}
+
 char *get_and_reset_last_err() {
     char *tmp = torch_last_err;
     torch_last_err = nullptr;

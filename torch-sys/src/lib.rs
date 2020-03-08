@@ -27,6 +27,7 @@ extern "C" {
     pub fn at_has_mkldnn() -> bool;
     pub fn at_get_parallel_info(info: *mut *mut c_char);
     pub fn at_free_parallel_info(info: *mut *mut c_char);
+    pub fn at_cudnn_is_acceptable(arg: *mut C_tensor) -> bool;
     pub fn at_new_tensor() -> *mut C_tensor;
     pub fn at_shallow_clone(arg: *mut C_tensor) -> *mut C_tensor;
     pub fn at_copy_(dst: *mut C_tensor, src: *mut C_tensor);

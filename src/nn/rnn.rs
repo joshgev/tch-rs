@@ -2,6 +2,14 @@
 use crate::{AsView, Device, Kind, Tensor, ToDevice};
 use failure::{bail, ensure, Error};
 
+/// `CuDNNMode` definition from: torch/csrc/api/include/torch/nn/modules/rnn.h
+enum CudnnMode {
+    RnnRelu = 0,
+    RnnTanh = 1,
+    Lstm = 2,
+    Gru = 3,
+}
+
 /// Trait for Recurrent Neural Networks.
 pub trait RNN {
     type State;
@@ -28,6 +36,8 @@ pub trait RNN {
     ///
     /// The input should have dimensions [batch_size, seq_len, features].
     fn seq_init(&self, input: &Tensor, state: &Self::State) -> (Tensor, Self::State);
+
+    fn flatten_parameters(&mut self);
 }
 
 /// The state for a LSTM network, this contains two tensors.
@@ -90,12 +100,25 @@ impl Default for RNNConfig {
 /// A Long Short-Term Memory (LSTM) layer.
 ///
 /// https://en.wikipedia.org/wiki/Long_short-term_memory
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct LSTM {
     flat_weights: Vec<Tensor>,
     hidden_dim: i64,
     config: RNNConfig,
     device: Device,
+}
+
+impl Clone for LSTM {
+    fn clone(&self) -> Self {
+        let mut rnn = Self {
+            flat_weights: self.flat_weights.clone(),
+            hidden_dim: self.hidden_dim,
+            config: self.config,
+            device: self.device,
+        };
+        rnn.flatten_parameters();
+        rnn
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -183,12 +206,14 @@ pub fn lstm(vs: &super::var_store::Path, in_dim: i64, hidden_dim: i64, c: RNNCon
             flat_weights.push(b_hh);
         }
     }
-    LSTM {
+    let mut rnn = LSTM {
         flat_weights,
         hidden_dim,
         config: c,
         device: vs.device(),
-    }
+    };
+    rnn.flatten_parameters();
+    rnn
 }
 
 impl RNN for LSTM {
@@ -223,11 +248,29 @@ impl RNN for LSTM {
         );
         (output, LSTMState((h, c)))
     }
+
+    fn flatten_parameters(&mut self) {
+        if let Device::Cuda(_) = self.device {
+            crate::no_grad(|| {
+                let in_dim = self.flat_weights.first().map(|w_ih| w_ih.size2().unwrap().1).unwrap_or(0);
+                Tensor::internal_cudnn_rnn_flatten_weight(
+                    self.flat_weights.as_mut(),
+                    if self.config.has_biases { 4 } else { 2 },
+                    in_dim,
+                    CudnnMode::Lstm as i64,
+                    self.hidden_dim,
+                    self.config.num_layers,
+                    self.config.batch_first,
+                    self.config.bidirectional,
+                )
+            });
+        }
+    }
 }
 
 impl ToDevice for LSTM {
     fn to_device(&self, device: Device) -> Self {
-        Self {
+        let mut rnn = Self {
             flat_weights: self
                 .flat_weights
                 .iter()
@@ -236,7 +279,9 @@ impl ToDevice for LSTM {
             hidden_dim: self.hidden_dim,
             config: self.config,
             device,
-        }
+        };
+        rnn.flatten_parameters();
+        rnn
     }
 
     fn device(&self) -> Device {
@@ -288,12 +333,25 @@ impl AsView for GRUState {
 /// A Gated Recurrent Unit (GRU) layer.
 ///
 /// https://en.wikipedia.org/wiki/Gated_recurrent_unit
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct GRU {
     flat_weights: Vec<Tensor>,
     hidden_dim: i64,
     config: RNNConfig,
     device: Device,
+}
+
+impl Clone for GRU {
+    fn clone(&self) -> Self {
+        let mut rnn = Self {
+            flat_weights: self.flat_weights.clone(),
+            hidden_dim: self.hidden_dim,
+            config: self.config,
+            device: self.device,
+        };
+        rnn.flatten_parameters();
+        rnn
+    }
 }
 
 impl GRU {
@@ -363,12 +421,14 @@ pub fn gru(vs: &super::var_store::Path, in_dim: i64, hidden_dim: i64, c: RNNConf
             flat_weights.push(b_hh);
         }
     }
-    GRU {
+    let mut rnn = GRU {
         flat_weights,
         hidden_dim,
         config: c,
         device: vs.device(),
-    }
+    };
+    rnn.flatten_parameters();
+    rnn
 }
 
 impl RNN for GRU {
@@ -401,11 +461,29 @@ impl RNN for GRU {
         );
         (output, GRUState(h))
     }
+
+    fn flatten_parameters(&mut self) {
+        if let Device::Cuda(_) = self.device {
+            crate::no_grad(|| {
+                let in_dim = self.flat_weights.first().map(|w_ih| w_ih.size2().unwrap().1).unwrap_or(0);
+                Tensor::internal_cudnn_rnn_flatten_weight(
+                    self.flat_weights.as_mut(),
+                    if self.config.has_biases { 4 } else { 2 },
+                    in_dim,
+                    CudnnMode::Gru as i64,
+                    self.hidden_dim,
+                    self.config.num_layers,
+                    self.config.batch_first,
+                    self.config.bidirectional,
+                )
+            });
+        }
+    }
 }
 
 impl ToDevice for GRU {
     fn to_device(&self, device: Device) -> Self {
-        Self {
+        let mut rnn = Self {
             flat_weights: self
                 .flat_weights
                 .iter()
@@ -414,7 +492,9 @@ impl ToDevice for GRU {
             hidden_dim: self.hidden_dim,
             config: self.config,
             device,
-        }
+        };
+        rnn.flatten_parameters();
+        rnn
     }
 
     fn device(&self) -> Device {
@@ -776,12 +856,14 @@ impl RnnBuilder {
             "Underlying RNN is not an LSTM."
         );
 
-        Ok(LSTM {
+        let mut rnn = LSTM {
             hidden_dim: self.hidden_dim().unwrap(),
             config: self.rnn_config().unwrap(),
             device: self.device().unwrap(),
             flat_weights: self.gather_weights(),
-        })
+        };
+        rnn.flatten_parameters();
+        Ok(rnn)
     }
 
     pub fn set_requires_grad(&mut self, requires_grad: bool) -> &mut Self {
@@ -798,11 +880,13 @@ impl RnnBuilder {
             "Underlying RNN is not a GRU."
         );
 
-        Ok(GRU {
+        let mut rnn = GRU {
             hidden_dim: self.hidden_dim().unwrap(),
             config: self.rnn_config().unwrap(),
             device: self.device().unwrap(),
             flat_weights: self.gather_weights(),
-        })
+        };
+        rnn.flatten_parameters();
+        Ok(rnn)
     }
 }
